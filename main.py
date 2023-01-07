@@ -1,4 +1,4 @@
-from cards import Card, default_deck, dataclass
+from cards import Card, default_deck, dataclass, values
 from collections import deque
 from random import shuffle
 
@@ -58,7 +58,23 @@ class Game:
     
     def has_smallest_trump(self):
         # updats index of player who's first to move
-        pass
+        trump = self.deck.get_trump().suit
+        min_val = [len(values) for _ in range(len(self.players))]
+        for ind, player in enumerate(self.players):
+            for card in player.hand:
+                if card.suit == trump:
+                    min_val[ind] = min(values.index(card.value), min_val[ind])
+        print(min_val)
+        def find_min(array: list[int]):
+            min = array[0]
+            ind = 0
+            for i, elem in enumerate(array):
+                if elem < min:
+                    min = elem
+                    ind = i       
+            return ind
+        
+        self.player_to_move = find_min(min_val)
     
     def values_can_be_popped(self) -> list[str]:
         # defines which cards can be popped if table not empty
@@ -76,6 +92,13 @@ class Game:
         pass
 
 g = Game()
+print(g.deck.get_trump().suit)
+g.has_smallest_trump()
+print(g.player_to_move)
+for p in g.players:
+    print(p.hand)
+
+
 
 # h = g.players[0].hand
 # print(h)
