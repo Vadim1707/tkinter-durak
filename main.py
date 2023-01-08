@@ -8,7 +8,7 @@ class Deck:
         tmp_deque = default_deck.copy()
         shuffle(tmp_deque)
         self.cards = deque(tmp_deque)
-        self.trump = self.get_trump()
+        self.trump = self.get_trump().suit
     
     def get_trump(self):
         return self.cards[0]
@@ -55,16 +55,17 @@ class Game:
         self.players = [Player(self.deck.draw()) for _ in range(players)]
         self.table = []
         self.player_to_move: int
+        self.trump = self.deck.trump
     
     def has_smallest_trump(self):
         # updats index of player who's first to move
-        trump = self.deck.get_trump().suit
+        # trump = self.deck.get_trump().suit
         min_val = [len(values) for _ in range(len(self.players))]
         for ind, player in enumerate(self.players):
             for card in player.hand:
-                if card.suit == trump:
+                if card.suit == self.trump:
                     min_val[ind] = min(values.index(card.value), min_val[ind])
-        print(min_val)
+        # print(min_val)
         def find_min(array: list[int]):
             min = array[0]
             ind = 0
@@ -78,25 +79,75 @@ class Game:
     
     def values_can_be_popped(self) -> list[str]:
         # defines which cards can be popped if table not empty
-        pass 
+        # ineffective. should be updated after each popping of card on table
 
-    def pop_card_on_table(self, player1: Player, player2: Player, card: Card):
-        # updates table
-        pass
+        if not self.table:
+            return []
+        possible_values = []
+        for card in self.table:
+            possible_values.append(card.value)
 
-    def cover_card():
+        return possible_values 
+
+    def pop_card_on_table(self, player: Player, card_ind: int = 0):
         # updates table
+        # pre: card is puttable, card index is legit and logic of the game doesn't break
+        
+        possible_card_values = self.values_can_be_popped()
+        
+        if player.hand[card_ind].value in possible_card_values or not possible_card_values:
+            card = player.put_card(card_ind)
+            self.table.append(card)
+        else:
+            raise Exception("Cannot put this card on board")
+        
+        return card
+        
+    
+
+    def cover_card(self, card_to_cover: Card, player: Player, card_ind: int):
+        # updates table
+        card = player.hand[card_ind]
+        if card.beats(card_to_cover, trump_suit=self.trump):
+            self.table.append(card)
+        else:
+            raise Exception("Cannot beat previous card with this one")
+        
+        return card
+    
+    def move(self):
+        # maybe change some functions and refactor before beginning
         pass
 
     def logic(self):
+        # move order: 0-1-2-0 etc
+        
         pass
 
 g = Game()
-print(g.deck.get_trump().suit)
+# print(g.deck.get_trump().suit)
 g.has_smallest_trump()
-print(g.player_to_move)
+mv = g.player_to_move
 for p in g.players:
     print(p.hand)
+
+
+# try:
+card_to_beat = g.pop_card_on_table(g.players[mv])
+print(g.table)
+print(g.trump)
+for i in range(6):
+    try:
+        g.cover_card(card_to_beat, g.players[(mv+1) % len(g.players)], i)
+        break
+    except Exception as e:
+        print('Ошибка:\n', e.with_traceback(None))
+
+# except:
+#     print(g.players[mv].hand[i-len(g.table)], " card cannot be put")
+
+print(g.table)
+    
 
 
 
