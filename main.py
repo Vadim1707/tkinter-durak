@@ -1,58 +1,4 @@
-from cards import Card, default_deck, dataclass, values
-# from functions import equal_arrays
-from collections import deque
-from random import shuffle
-
-class Deck:
-    # creates queue of cards
-    def __init__(self):
-        tmp_deque = default_deck.copy()
-        shuffle(tmp_deque)
-        self.cards = deque(tmp_deque)
-        self.trump = self.get_trump().suit
-    
-    def get_trump(self):
-        return self.cards[0]
-    
-    def draw_one(self) -> Card:
-        if not self.cards:
-            raise Exception("Cannot draw a card from empty deck")
-        return self.cards.pop()
-    
-    def draw(self, n=6):
-        return [self.draw_one() for _ in range(n)]
-
-    def __repr__(self):
-        return str(self.cards)
-    
-    
-    
-@dataclass
-class Player:
-    # player has hand with cards and ability to play game
-    hand: list[Card]
-
-    def put_card(self, ind=0):
-        if ind > len(self.hand) - 1 or ind < 0:
-            raise Exception("Index of player's hand out of range")
-        card = self.hand[ind]
-        del self.hand[ind]
-        return card
-    
-    def get_full_hand(self, d: Deck):
-        while len(self.hand) < 6:
-            try:
-                self.hand.append(d.draw_one())
-            except:
-                return
-    
-    def get_values(self):
-        values = set()
-        for card in self.hand:
-            values.append(card.value)
-        return values
-
-        
+from classes import Card, Deck, Player, values
 
 
 class Game:
@@ -64,6 +10,9 @@ class Game:
         self.table = []
         self.trump = self.deck.trump
         self.player_to_move = self.has_smallest_trump()
+        self.discard_pile = []
+        for i in range(1, players):
+            self.players[i].is_bot = True
         
     
     def has_smallest_trump(self):
@@ -101,8 +50,20 @@ class Game:
     def pop_card_on_table(self, player: Player, card_ind: int = 0):
         # updates table
         # pre: card is puttable, card index is legit and logic of the game doesn't break
-        
+
         possible_card_values = self.values_can_be_popped()
+
+        # if player.is_bot:
+        #     for i in range(len(player.hand)):
+        #         try:
+        #             if player.hand[i].value in possible_card_values or not possible_card_values:
+        #                 card = player.put_card(card_ind)
+        #                 self.table.append(card)
+        #         except:
+        #             pass
+        #         else:
+        #             return card
+
         
         if player.hand[card_ind].value in possible_card_values or not possible_card_values:
             card = player.put_card(card_ind)
@@ -133,51 +94,114 @@ class Game:
                 if val in self.values_can_be_popped():
                     return True
         return False
+    
+    def can_beat(self, player: Player, card: Card):
+        for cp in player.hand:
+            if cp.beats(card):
+                return True
+        return False
+    
+    def take_table_cards(self, player: Player):
+        player.hand.extend(self.table)
+        self.table = []
+
+    def next_player(self, currently_moves: int, currently_beats: int):
+        a = (currently_moves + 1) % len(self.players)
+        if a == currently_beats:
+            a = (a + 1) % len(self.players)
+        return a
+    
+    def end_of_move(self, history) -> bool:
+        return history[-len(self.players) + 1:] == ['q' for _ in range(len(self.players) - 1)]
+    
+    def finish_move(self, next_to_move: int):
+        self.discard_pile.extend(self.table)
+        self.table = []
+        self.player_to_move = next_to_move
+
+    def stats(self): #prints but can turn it to string in future if needed for frontend
+        print("trump: ", self.trump, "\nplayer to move: ", self.player_to_move)
+        for i, p in enumerate(self.players):
+            print(f"p{i}: ", p.hand)
+        print("Table: ", self.table)
+        print("Discard pile: ", self.discard_pile)
+
             
     
-    def move(self, is_first_all_clear=False):
-        # maybe change some functions and refactor before beginning
-        # Unfinished
-        # TODO: should always put at least one card on board
-        max_table = 12 if is_first_all_clear else 10
+    def move(self, is_first_move=False):
+        # Unfinished: bugs are possible
+        # pre: table clear, all players have enough cards
+        # post: table clear, players have not enough cards
+        max_table = 10 if is_first_move else 12
         history = []
         i_beat = False
+        initiated_move = False
         player_who_beats = (self.player_to_move + 1) % len(self.players)
+        
         while len(self.players[player_who_beats].hand) and max_table - len(self.table):
-            print("Hand of guy who's gonna beat: ", self.players[player_who_beats].hand)
-            print("Hand of the guy who pops cards: ", self.players[self.player_to_move].hand)
-            ind_of_card = input("Which card to put? (type index of card starting from 0, or q to stop)")
-            history.append(ind_of_card)
-            if ind_of_card == 'q':
+            
+            # is_bot = self.players[player_who_beats].is_bot if i_beat else self.players[self.player_to_move].is_bot
 
-                
-                print(history)
-                self.player_to_move = (self.player_to_move + 1) % len(self.players)
-                if self.player_to_move == player_who_beats:
-                    self.player_to_move = (self.player_to_move + 1) % len(self.players)
+            # if is_bot:
+            #     if not i_beat:
+            #         try:
+            #             self.pop_card_on_table(self.players[self.player_to_move])
+            #         except:
+            #             pass
+            #     else:
+            #         pass
+            #     i_beat = not i_beat
+
+            if not self.players[self.player_to_move].hand:
+                history.append('q')
+                if self.end_of_move(history):
+                    self.finish_move(player_who_beats)
+                    break
+                continue
+
+            s1 = "Hand of guy who's gonna beat: " + str(self.players[player_who_beats].hand)
+            s2 = "Hand of the guy who pops cards: " + str(self.players[self.player_to_move].hand)
+            print("putting\n", s2) if not i_beat else print("beating\n", s1)
+
+            
+            ind_of_card = input("Which card to put? (type index of card starting from 0-1-2-etc, q to stop, t to take hand, s to show stats)")
+            history.append(ind_of_card)
+            # stop moving (for player who puts)
+
+            if ind_of_card == 's':
+                self.stats()
+                continue
+
+            if ind_of_card == 'q':
+                if not initiated_move:
+                    print("Put one card on table to continue")
+                    continue
+
+                self.player_to_move = self.next_player(self.player_to_move, player_who_beats)
 
                 if len(history) >= len(self.players) - 1:
-                    print(history[-len(self.players) + 1:])
-                    print(['q' for _ in range(len(self.players) - 1)])
-                    if history[-len(self.players) + 1:] == ['q' for _ in range(len(self.players) - 1)]:
+                    if self.end_of_move(history):
+                        self.finish_move(player_who_beats)
                         break
-                        # then move ends
-            if ind_of_card == 't':
-                # take card
+                       
+            if ind_of_card == 't' and i_beat:
+                if not initiated_move:
+                    continue
+                # take cards
+                self.take_table_cards(self.players[player_who_beats])
+                self.player_to_move = (player_who_beats + 1) % len(self.players)
                 break
+
             try:
 
                 if not i_beat:
-                    print("putting")
-                    self.pop_card_on_table(self.players[self.player_to_move], int(ind_of_card))
-                    i_beat = True
-                    print(self.table)
+                    self.pop_card_on_table(self.players[self.player_to_move], int(ind_of_card)) 
                 elif i_beat:
-                    print("beating")
                     self.cover_card(self.table[-1], self.players[player_who_beats], int(ind_of_card))
-                    i_beat = False
-                    print(self.table)
-
+                
+                i_beat = not i_beat
+                print("table: ", self.table)
+                initiated_move = True
 
             except Exception:
                 print("Can't put this card on table")
@@ -185,6 +209,24 @@ class Game:
 
     def logic(self):
         # move order: 0-1-2-0 etc
+        lengths = [len(self.players[i].hand) for i in range(len(self.players))]
+        is_first_move = True
+        while any(lengths):
+            print("---New Move---")
+            print("trump: ", g.trump)
+            
+            self.move(is_first_move)
+            if len(self.discard_pile) > 0:
+                is_first_move = False
+            
+            for player in self.players:
+                player.get_full_hand(self.deck)
+
+            
+            
+        
+
+            
         
         pass
 
@@ -192,7 +234,7 @@ g = Game(players=3)
 print(g.trump, g.player_to_move)
 for p in g.players:
     print(p.hand)
-g.move()
+g.logic()
 print(g.table)
 # # print(g.deck.get_trump().suit)
 # g.has_smallest_trump()
