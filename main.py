@@ -1,10 +1,11 @@
 from classes import Card, Deck, Player, values
+from time import sleep
 
 
 class Game:
     def __init__(self, players: int = 3):
         if players > 6 or players < 2:
-            raise Exception("Cannot create game with that player amount")
+            raise Exception(f"Cannot create game with that player amount ({players})")
         self.deck = Deck()
         self.players = [Player(self.deck.draw()) for _ in range(players)]
         self.table = []
@@ -69,7 +70,7 @@ class Game:
             card = player.put_card(card_ind)
             self.table.append(card)
         else:
-            raise Exception("Cannot put this card on board")
+            raise Exception(f"Cannot put {card} on board")
         
         return card
         
@@ -83,7 +84,7 @@ class Game:
             card = player.put_card(card_ind)
             self.table.append(card)
         else:
-            raise Exception("Cannot beat previous card with this one")
+            raise Exception(f"Cannot beat previous card {card_to_cover} with this one {card}")
         
         return card
 
@@ -119,12 +120,13 @@ class Game:
         self.table = []
         self.player_to_move = next_to_move
 
-    def stats(self): #prints but can turn it to string in future if needed for frontend
+    def stats(self, history = []): #prints but can turn it to string in future if needed for frontend
         print("trump: ", self.trump, "\nplayer to move: ", self.player_to_move)
         for i, p in enumerate(self.players):
             print(f"p{i}: ", p.hand)
         print("Table: ", self.table)
         print("Discard pile: ", self.discard_pile)
+        print("history: ", history)
 
             
     
@@ -132,6 +134,7 @@ class Game:
         # Unfinished: bugs are possible
         # pre: table clear, all players have enough cards
         # post: table clear, players have not enough cards
+        # TODO: bots! and some logic function enhancements
         max_table = 10 if is_first_move else 12
         history = []
         i_beat = False
@@ -140,17 +143,56 @@ class Game:
         
         while len(self.players[player_who_beats].hand) and max_table - len(self.table):
             
-            # is_bot = self.players[player_who_beats].is_bot if i_beat else self.players[self.player_to_move].is_bot
+            is_bot = self.players[player_who_beats].is_bot if i_beat else self.players[self.player_to_move].is_bot
 
-            # if is_bot:
-            #     if not i_beat:
-            #         try:
-            #             self.pop_card_on_table(self.players[self.player_to_move])
-            #         except:
-            #             pass
-            #     else:
-            #         pass
-            #     i_beat = not i_beat
+            if is_bot:
+
+                print("table: ", self.table)
+                self.stats(history)
+
+                if self.end_of_move(history):
+                    self.finish_move(player_who_beats)
+                    break
+                
+                if not i_beat:
+                    has_put = False
+                    ind = 0
+                    while ind < len(self.players[self.player_to_move].hand):
+                        try:
+                            self.pop_card_on_table(self.players[self.player_to_move], ind)
+                            has_put = True
+                            break
+                        except:
+                            pass
+                        ind += 1
+                    if not has_put:
+                        self.next_player(self.player_to_move, player_who_beats)
+                        continue
+                    else:
+                        history.append(ind)
+                        i_beat = not i_beat
+                        continue
+                elif i_beat:
+                    has_put = False
+                    ind = 0
+                    while ind < len(self.players[self.player_to_move].hand):
+                        try:
+                            self.cover_card(self.table[-1], self.players[self.player_to_move], ind)
+                            has_put = True
+                            break
+                        except:
+                            pass
+                        ind += 1
+                    if not has_put:
+                        self.take_table_cards(self.players[player_who_beats])
+                        self.player_to_move = (player_who_beats + 1) % len(self.players)
+                        break
+                    else:
+                        history.append(ind)
+                        i_beat = not i_beat
+                        continue
+
+                # i_beat = not i_beat
 
             if not self.players[self.player_to_move].hand:
                 history.append('q')
@@ -161,11 +203,14 @@ class Game:
 
             s1 = "Hand of guy who's gonna beat: " + str(self.players[player_who_beats].hand)
             s2 = "Hand of the guy who pops cards: " + str(self.players[self.player_to_move].hand)
+            print("table: ", self.table)
             print("putting\n", s2) if not i_beat else print("beating\n", s1)
 
             
             ind_of_card = input("Which card to put? (type index of card starting from 0-1-2-etc, q to stop, t to take hand, s to show stats)")
-            history.append(ind_of_card)
+            if ind_of_card == 'q' or ind_of_card.isnumeric():
+                history.append(ind_of_card)
+
             # stop moving (for player who puts)
 
             if ind_of_card == 's':
@@ -200,11 +245,10 @@ class Game:
                     self.cover_card(self.table[-1], self.players[player_who_beats], int(ind_of_card))
                 
                 i_beat = not i_beat
-                print("table: ", self.table)
                 initiated_move = True
 
-            except Exception:
-                print("Can't put this card on table")
+            except Exception as e:
+                print(str(e))
 
 
     def logic(self):
