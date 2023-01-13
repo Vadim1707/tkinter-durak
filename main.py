@@ -1,5 +1,7 @@
 from classes import Card, Deck, Player, values
-from time import sleep
+from time import sleep, time
+import sys
+import traceback
 
 
 class Game:
@@ -12,6 +14,7 @@ class Game:
         self.trump = self.deck.trump
         self.player_to_move = self.has_smallest_trump()
         self.discard_pile = []
+        self.time = str(time())
         for i in range(1, players):
             self.players[i].is_bot = True
         
@@ -120,13 +123,28 @@ class Game:
         self.table = []
         self.player_to_move = next_to_move
 
-    def stats(self, history = []): #prints but can turn it to string in future if needed for frontend
-        print("trump: ", self.trump, "\nplayer to move: ", self.player_to_move)
-        for i, p in enumerate(self.players):
-            print(f"p{i}: ", p.hand)
-        print("Table: ", self.table)
-        print("Discard pile: ", self.discard_pile)
-        print("history: ", history)
+    def stats(self, history = [], p=False): #prints but can turn it to string in future if needed for frontend    
+        if p:
+            print("trump: ", self.trump, "\nplayer to move: ", self.player_to_move)
+            for i, p in enumerate(self.players):
+                print(f"p{i}: ", p.hand)
+            print("Table: ", self.table)
+            print("Discard pile: ", self.discard_pile)
+            print("history: ", history)
+
+        original_stdout = sys.stdout
+
+        with open(f'stats-{self.time}.txt', 'a') as f:
+            sys.stdout = f # Change the standard output to the file we created.
+            print("trump: ", self.trump, "\nplayer to move: ", self.player_to_move)
+            for i, p in enumerate(self.players):
+                print(f"p{i}: ", p.hand)
+            print("Table: ", self.table)
+            print("Discard pile: ", self.discard_pile)
+            print("history: ", history)
+            sys.stdout = original_stdout
+
+        
 
             
     
@@ -135,6 +153,11 @@ class Game:
         # pre: table clear, all players have enough cards
         # post: table clear, players have not enough cards
         # TODO: bots! and some logic function enhancements
+        # BUG can't "t" or "s" on first turn when playing with bots
+        # BUG after took on second turn vs bot - I start moving next
+        # BUG on BUG with that new bot logic
+        # Idk how to debug(
+
         max_table = 10 if is_first_move else 12
         history = []
         i_beat = False
@@ -166,24 +189,27 @@ class Game:
                             pass
                         ind += 1
                     if not has_put:
-                        self.next_player(self.player_to_move, player_who_beats)
+                        history.append('q')
+                        self.player_to_move = self.next_player(self.player_to_move, player_who_beats)
                         continue
                     else:
                         history.append(ind)
                         i_beat = not i_beat
+                        initiated_move = True
                         continue
                 elif i_beat:
                     has_put = False
                     ind = 0
-                    while ind < len(self.players[self.player_to_move].hand):
+                    while ind < len(self.players[player_who_beats].hand):
                         try:
-                            self.cover_card(self.table[-1], self.players[self.player_to_move], ind)
+                            self.cover_card(self.table[-1], self.players[player_who_beats], ind)
                             has_put = True
                             break
                         except:
                             pass
                         ind += 1
                     if not has_put:
+                        history.append('t')
                         self.take_table_cards(self.players[player_who_beats])
                         self.player_to_move = (player_who_beats + 1) % len(self.players)
                         break
@@ -214,7 +240,7 @@ class Game:
             # stop moving (for player who puts)
 
             if ind_of_card == 's':
-                self.stats()
+                self.stats(history, p=True)
                 continue
 
             if ind_of_card == 'q':
@@ -248,15 +274,17 @@ class Game:
                 initiated_move = True
 
             except Exception as e:
-                print(str(e))
+                print(traceback.format_exc())
 
 
     def logic(self):
         # move order: 0-1-2-0 etc
         lengths = [len(self.players[i].hand) for i in range(len(self.players))]
         is_first_move = True
-        while any(lengths):
-            print("---New Move---")
+        move = 0
+        while any(lengths) and move < 100:
+            move += 1
+            print(f"---New Move---{move}")
             print("trump: ", g.trump)
             
             self.move(is_first_move)
@@ -266,15 +294,9 @@ class Game:
             for player in self.players:
                 player.get_full_hand(self.deck)
 
-            
-            
-        
-
-            
-        
-        pass
 
 g = Game(players=3)
+g.players[0].is_bot = False
 print(g.trump, g.player_to_move)
 for p in g.players:
     print(p.hand)
