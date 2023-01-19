@@ -1,7 +1,11 @@
-from classes import Card, Deck, Player, values
-from time import sleep, time
+from time import time
 import sys
-import traceback
+
+from constants import VALUES_DICT
+from card import Card
+from deck import Deck
+from player import Player
+
 
 
 class Game:
@@ -11,7 +15,7 @@ class Game:
         self.deck = Deck()
         self.players = [Player(self.deck.draw()) for _ in range(players)]
         self.table = []
-        self.trump = self.deck.trump
+        self.trump = self.deck.get_trump()
         self.player_to_move = self.has_smallest_trump()
         self.discard_pile = []
         self.time = str(time())
@@ -20,24 +24,14 @@ class Game:
         
     
     def has_smallest_trump(self):
-        # updats index of player who's first to move
-        # trump = self.deck.get_trump().suit
-        min_val = [len(values) for _ in range(len(self.players))]
-        for ind, player in enumerate(self.players):
+        ind_player, smallest_trump = 0, 100
+        for i, player in enumerate(self.players):
             for card in player.hand:
-                if card.suit == self.trump:
-                    min_val[ind] = min(values.index(card.value), min_val[ind])
-        # print(min_val)
-        def find_min(array: list[int]):
-            min = array[0]
-            ind = 0
-            for i, elem in enumerate(array):
-                if elem < min:
-                    min = elem
-                    ind = i       
-            return ind
-        
-        return find_min(min_val)
+                if card.get_suit() == self.trump and VALUES_DICT[card.get_value()] < smallest_trump:
+                    ind_player = i
+                    smallest_trump = VALUES_DICT[card.get_value()]
+        return ind_player
+
     
     def values_can_be_popped(self) -> list[str]:
         # defines which cards can be popped if table not empty
@@ -57,17 +51,6 @@ class Game:
 
         possible_card_values = self.values_can_be_popped()
 
-        # if player.is_bot:
-        #     for i in range(len(player.hand)):
-        #         try:
-        #             if player.hand[i].value in possible_card_values or not possible_card_values:
-        #                 card = player.put_card(card_ind)
-        #                 self.table.append(card)
-        #         except:
-        #             pass
-        #         else:
-        #             return card
-
         
         if player.hand[card_ind].value in possible_card_values or not possible_card_values:
             card = player.put_card(card_ind)
@@ -76,8 +59,6 @@ class Game:
             raise Exception(f"Cannot put {card} on board")
         
         return card
-        
-    # TODO those two functions can be merged into one with adding one extra paramether (if he moves or beats)
 
     def cover_card(self, card_to_cover: Card, player: Player, card_ind: int):
         # updates table
@@ -91,19 +72,19 @@ class Game:
         
         return card
 
-    def has_cards_to_pop(self, player_ind: int):
-        p = self.players[player_ind]
-        if len(p.hand) > 0:
-            for val in p.get_values():
-                if val in self.values_can_be_popped():
-                    return True
-        return False
+    # def has_cards_to_pop(self, player_ind: int):
+    #     p = self.players[player_ind]
+    #     if len(p.hand) > 0:
+    #         for val in p.get_values():
+    #             if val in self.values_can_be_popped():
+    #                 return True
+    #     return False
     
-    def can_beat(self, player: Player, card: Card):
-        for cp in player.hand:
-            if cp.beats(card):
-                return True
-        return False
+    # def can_beat(self, player: Player, card: Card):
+    #     for cp in player.hand:
+    #         if cp.beats(card):
+    #             return True
+    #     return False
     
     def take_table_cards(self, player: Player):
         player.hand.extend(self.table)
@@ -123,7 +104,7 @@ class Game:
         self.table = []
         self.player_to_move = next_to_move
 
-    def stats(self, history = [], p=False): #prints but can turn it to string in future if needed for frontend    
+    def stats(self, history=None, p=False):  # prints but can turn it to string in future if needed for frontend    
         if p:
             print("trump: ", self.trump, "\nplayer to move: ", self.player_to_move)
             for i, p in enumerate(self.players):
@@ -134,7 +115,7 @@ class Game:
 
         original_stdout = sys.stdout
 
-        with open(f'stats-{self.time}.txt', 'a') as f:
+        with open('stats1.txt', 'a') as f: # f'stats\\stats1-{self.time}'
             sys.stdout = f # Change the standard output to the file we created.
             print("trump: ", self.trump, "\nplayer to move: ", self.player_to_move)
             for i, p in enumerate(self.players):
@@ -143,165 +124,177 @@ class Game:
             print("Discard pile: ", self.discard_pile)
             print("history: ", history)
             sys.stdout = original_stdout
+    
+    # def delete_empty_player(self, history):
+    #     if  not self.players[self.player_to_move].hand and not self.deck:
+    #         del self.players[self.player_to_move]
+    #         print(f"player-{self.player_to_move} has won. Congrats!")
+    #         self.stats(history, p=True)
+    #         if self.player_to_move > len(self.players):
+    #             self.player_to_move = 0
+
+    def take_cards(self):
+        pass
+    
+    def put_cards_to_take(self):
+        pass
 
         
 
             
     
     def move(self, is_first_move=False):
-        # Unfinished: bugs are possible
-        # pre: table clear, all players have enough cards
-        # post: table clear, players have not enough cards
-        # TODO: bots! and some logic function enhancements
-        # BUG can't "t" or "s" on first turn when playing with bots
-        # BUG after took on second turn vs bot - I start moving next
-        # BUG on BUG with that new bot logic
-        # Idk how to debug(
 
-        max_table = 10 if is_first_move else 12
+        # create move order
+        p = len(self.players)
+        BEATING_PLAYER = (self.player_to_move + 1) % p
+        players_moving = [i for i in range(p) if i != BEATING_PLAYER]
+        i = players_moving.index(self.player_to_move)
+        players_moving = players_moving[i:] + players_moving[:i]
+        move_order = [0 for _ in range(2*p-2)]
+        for i in range(len(move_order)):
+            if i%2==1:
+                move_order[i] = BEATING_PLAYER
+            else:
+                move_order[i] = players_moving[i // 2]
+
         history = []
-        i_beat = False
-        initiated_move = False
-        player_who_beats = (self.player_to_move + 1) % len(self.players)
-        
-        while len(self.players[player_who_beats].hand) and max_table - len(self.table):
-            
-            is_bot = self.players[player_who_beats].is_bot if i_beat else self.players[self.player_to_move].is_bot
-
-            if is_bot:
-
-                print("table: ", self.table)
-                self.stats(history)
-
-                if self.end_of_move(history):
-                    self.finish_move(player_who_beats)
-                    break
-                
-                if not i_beat:
-                    has_put = False
-                    ind = 0
-                    while ind < len(self.players[self.player_to_move].hand):
-                        try:
-                            self.pop_card_on_table(self.players[self.player_to_move], ind)
-                            has_put = True
-                            break
-                        except:
-                            pass
-                        ind += 1
-                    if not has_put:
-                        history.append('q')
-                        self.player_to_move = self.next_player(self.player_to_move, player_who_beats)
-                        continue
-                    else:
-                        history.append(ind)
-                        i_beat = not i_beat
-                        initiated_move = True
-                        continue
-                elif i_beat:
-                    has_put = False
-                    ind = 0
-                    while ind < len(self.players[player_who_beats].hand):
-                        try:
-                            self.cover_card(self.table[-1], self.players[player_who_beats], ind)
-                            has_put = True
-                            break
-                        except:
-                            pass
-                        ind += 1
-                    if not has_put:
-                        history.append('t')
-                        self.take_table_cards(self.players[player_who_beats])
-                        self.player_to_move = (player_who_beats + 1) % len(self.players)
-                        break
-                    else:
-                        history.append(ind)
-                        i_beat = not i_beat
-                        continue
-
-                # i_beat = not i_beat
-
-            if not self.players[self.player_to_move].hand:
-                history.append('q')
-                if self.end_of_move(history):
-                    self.finish_move(player_who_beats)
-                    break
-                continue
-
-            s1 = "Hand of guy who's gonna beat: " + str(self.players[player_who_beats].hand)
-            s2 = "Hand of the guy who pops cards: " + str(self.players[self.player_to_move].hand)
-            print("table: ", self.table)
-            print("putting\n", s2) if not i_beat else print("beating\n", s1)
-
-            
-            ind_of_card = input("Which card to put? (type index of card starting from 0-1-2-etc, q to stop, t to take hand, s to show stats)")
-            if ind_of_card == 'q' or ind_of_card.isnumeric():
-                history.append(ind_of_card)
-
-            # stop moving (for player who puts)
-
-            if ind_of_card == 's':
+        # first move
+        card_to_put = -1
+        while 0 > card_to_put or card_to_put > len(self.players[move_order[0]].hand) - 1:
+            card_to_put = input("Please, put card on table to start a move (0,1,...) or s for stats: ")
+            if card_to_put == 's':
                 self.stats(history, p=True)
-                continue
-
-            if ind_of_card == 'q':
-                if not initiated_move:
-                    print("Put one card on table to continue")
-                    continue
-
-                self.player_to_move = self.next_player(self.player_to_move, player_who_beats)
-
-                if len(history) >= len(self.players) - 1:
-                    if self.end_of_move(history):
-                        self.finish_move(player_who_beats)
-                        break
-                       
-            if ind_of_card == 't' and i_beat:
-                if not initiated_move:
-                    continue
-                # take cards
-                self.take_table_cards(self.players[player_who_beats])
-                self.player_to_move = (player_who_beats + 1) % len(self.players)
-                break
-
             try:
+                card_to_put = int(card_to_put)
+            except:
+                card_to_put = -1
 
-                if not i_beat:
-                    self.pop_card_on_table(self.players[self.player_to_move], int(ind_of_card)) 
-                elif i_beat:
-                    self.cover_card(self.table[-1], self.players[player_who_beats], int(ind_of_card))
-                
-                i_beat = not i_beat
-                initiated_move = True
+        self.table.append(self.players[move_order[0]].hand.pop(card_to_put))
+        print(self.table)
+        move_order = move_order[1:] + move_order[:1]
+        history = [card_to_put]
 
-            except Exception as e:
-                print(traceback.format_exc())
+        # second move
+        card_to_put = -1
+    
+        while 0 > card_to_put or card_to_put > len(self.players[move_order[0]].hand) - 1:
+            card_to_put = input("Please, put card on table to start a move (0,1,...), s for stats or t to take: ")
+            if card_to_put == 's':
+                self.stats(history, p=True)
+            if card_to_put == 't':
+                self.put_cards_to_take() # currently empty
+                self.take_cards()        # currently empty
+                if len(self.players) == 2:
+                    self.player_to_move = 1 - self.player_to_move
+                else:
+                    self.player_to_move = (self.player_to_move + 2) % p
+                return
+            try:
+                card_to_put = int(card_to_put)
+                if not self.players[move_order[0]].hand[card_to_put].beats(self.table[0], self.trump):
+                    print(f'card {self.players[move_order[0]].hand[card_to_put]} doesn\'t beat card {self.table[0]}')
+                    card_to_put = -1
+                    continue
+            except:
+                card_to_put = -1
+
+        self.table.append(self.players[move_order[0]].hand.pop(card_to_put))
+        print(self.table)
+        move_order = move_order[1:] + move_order[:1]
+        history.append(card_to_put)
+
+        # third move
+        card_to_put = -1
+        while 0 > card_to_put or card_to_put > len(self.players[move_order[0]].hand) - 1:
+            card_to_put = input("Please, put card on table to start a move (0,1,...), s for stats or q to stop moving: ")
+            if card_to_put == 's':
+                self.stats(history, p=True)
+            if card_to_put == 'q' or len(self.players[move_order[0]].hand) == 0:
+                # ask for move from next player
+                if len(self.players) == 2 or self.end_of_move(history):
+                    self.finish_move(next_to_move=move_order[1])
+                    return
+                move_order = move_order[2:] + move_order[:2]
+                history.append('q')
+                card_to_put = -1
+                continue
+            try:
+                card_to_put = int(card_to_put)
+                if self.players[move_order[0]].hand[card_to_put] not in self.values_can_be_popped():
+                    print(f'card {self.players[move_order[0]].hand[card_to_put]} cannot be put on table')
+                    card_to_put = -1
+            except:
+                card_to_put = -1
+
+        self.table.append(self.players[move_order[0]].hand.pop(card_to_put))
+        print(self.table)
+        move_order = move_order[1:] + move_order[:1]
+        history.append(card_to_put)
+
+        # fourth move
+        card_to_put = -1
+    
+        while 0 > card_to_put or card_to_put > len(self.players[move_order[0]].hand) - 1:
+            card_to_put = input("Please, put card on table to start a move (0,1,...), s for stats or t to take: ")
+            if card_to_put == 's':
+                self.stats(history, p=True)
+            if card_to_put == 't':
+                self.put_cards_to_take() # currently empty
+                self.take_cards()        # currently empty
+                if len(self.players) == 2:
+                    self.player_to_move = 1 - self.player_to_move
+                else:
+                    self.player_to_move = (self.player_to_move + 2) % p
+                return
+            try:
+                card_to_put = int(card_to_put)
+                if not self.players[move_order[0]].hand[card_to_put].beats(self.table[0], self.trump):
+                    print(f'card {self.players[move_order[0]].hand[card_to_put]} doesn\'t beat card {self.table[0]}')
+                    card_to_put = -1
+                    continue
+            except:
+                card_to_put = -1
+
+        self.table.append(self.players[move_order[0]].hand.pop(card_to_put))
+        print(self.table)
+        move_order = move_order[1:] + move_order[:1]
+        history.append(card_to_put)
+
+        
+
+
+
+
+
+        
+
+
+
+
+        
+        # a = input("type: s for stats")
+        # if a == "s":
+        #     self.stats(history, p=True)
 
 
     def logic(self):
-        # move order: 0-1-2-0 etc
-        lengths = [len(self.players[i].hand) for i in range(len(self.players))]
-        is_first_move = True
-        move = 0
-        while any(lengths) and move < 100:
-            move += 1
-            print(f"---New Move---{move}")
-            print("trump: ", g.trump)
-            
-            self.move(is_first_move)
-            if len(self.discard_pile) > 0:
-                is_first_move = False
-            
-            for player in self.players:
-                player.get_full_hand(self.deck)
+        self.move()
+
+                    
+
 
 
 g = Game(players=3)
 g.players[0].is_bot = False
+g.stats([], p=True)
+
 print(g.trump, g.player_to_move)
 for p in g.players:
     print(p.hand)
 g.logic()
-print(g.table)
+# print(g.table)
+
 # # print(g.deck.get_trump().suit)
 # g.has_smallest_trump()
 # mv = g.player_to_move
